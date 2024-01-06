@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cassert>
 #include <condition_variable>
 #include <functional>
 #include <memory>
@@ -35,7 +36,7 @@ public:
   recv()
   {
     std::lock_guard<std::mutex> lock(*mtx);
-    cond_var->wait(lock, [&q=*rx]() { return not q.empty(); });
+    cond_var->wait(lock, [&rx=*rx]() { return not rx.empty(); });
     assert(not rx->empty());
     auto value = std::move(rx->front());
     rx->pop();
@@ -157,9 +158,13 @@ public:
 
 private:
   void
-  operator()() const noexcept
+  operator()() const
   {
-    return;
+    auto token = handle.get_stop_token();
+    while (not token.stop_requested()) {
+      auto task = tx.recv();
+      task();
+    }
   }
 
   std::jthread handle;
@@ -168,6 +173,16 @@ private:
 
 class ThreadPool {
 public:
+  static ThreadPool
+  with_nthreads(unsigned nthreads)
+  {
+    if (not nthreads)
+      throw std::invalid_argument("The number of threads should be non-zero.");
+
+    auto [tx, rx] = channel();
+    return ThreadPool(nthreads, std::move(tx), std::move(rx));
+  }
+
 private:
   ThreadPool(
       unsigned nworkers,
@@ -185,21 +200,6 @@ private:
 
   std::vector<Worker> workers;
   Producer<std::move_only_function<void()> tx;
-
-  friend PoolOpt;
-};
-
-class PoolOpt {
-public:
-  static ThreadPool
-  with(unsigned nthreads)
-  {
-    if (not nthreads)
-      throw std::invalid_argument("The number of threads should be non-zero.");
-
-    auto [tx, rx] = channel();
-    return ThreadPool(nthreads, std::move(tx), std::move(rx));
-  }
 };
 
 } // namespace par
