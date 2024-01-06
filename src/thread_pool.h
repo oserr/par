@@ -183,6 +183,11 @@ public:
     return ThreadPool(nthreads, std::move(tx), std::move(rx));
   }
 
+  void submit(std::move_only_function<void()> fn)
+  {
+    tx.send(std::move(fn));
+  }
+
 private:
   ThreadPool(
       unsigned nworkers,
