@@ -2,7 +2,9 @@
 
 #include <cassert>
 #include <condition_variable>
+#include <exception>
 #include <functional>
+#include <future>
 #include <iostream>
 #include <memory>
 #include <mutex>
@@ -10,6 +12,7 @@
 #include <stdexcept>
 #include <thread>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -209,9 +212,35 @@ public:
     return ThreadPool(nthreads, std::move(tx), std::move(rx));
   }
 
-  void submit(TaskFn fn)
+  template<
+    typename F,
+    typename... Args,
+    typename R = std::invoke_result_t<F, Args...>>
+  [[nodiscard]] std::future<R>
+  submit(F func, Args... args)
   {
+    std::promise<R> prom;
+    auto fut = prom.get_future();
+
+    auto fn = [prom=std::move(prom),
+               func=std::move(func),
+               ...args=std::move(args)]() mutable
+    {
+      try {
+        if constexpr (not std::is_void_v<R>) {
+          prom.set_value(std::invoke(func, args...));
+        } else {
+          std::invoke(func, args...);
+          prom.set_value();
+        }
+      } catch (...) {
+        prom.set_exception(std::current_exception());
+      }
+    };
+
     tx.send(std::move(fn));
+
+    return fut;
   }
 
   // Stop all the workers.

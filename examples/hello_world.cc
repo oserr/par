@@ -11,13 +11,14 @@
 using namespace std::literals;
 
 void
-hello_world()
+hello_world(unsigned i)
 {
   auto id = std::this_thread::get_id();
 
   {
     std::osyncstream osync(std::cout);
-    osync << "hello world from thread "
+    osync << "hello world " << i
+          << " from thread "
           << id
           << " before going to sleep\n";
     }
@@ -26,7 +27,8 @@ hello_world()
 
   {
     std::osyncstream osync(std::cout);
-    osync << "hello world from thread "
+    osync << "hello world " << i
+          << " from thread "
           << id
           << " after going to sleep\n";
   }
@@ -38,7 +40,7 @@ main()
   auto tp = par::ThreadPool::with_nthreads(8);
 
   for (unsigned i = 0; i < 8; ++i)
-    tp.submit(hello_world);
+    (void)tp.submit(hello_world, i);
 
   return EXIT_SUCCESS;
 }
