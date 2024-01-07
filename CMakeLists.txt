@@ -34,3 +34,9 @@ add_library(par STATIC
 set_target_properties(par PROPERTIES CXX_STANDARD 23 LINKER_LANGUAGE CXX)
 target_compile_features(par PRIVATE)
 target_link_libraries(par ${CMAKE_THREADS_LIBS_INIT})
+
+add_executable(hello_world examples/hello_world.cc)
+set_target_properties(hello_world PROPERTIES CXX_STANDARD 23)
+target_include_directories(hello_world PUBLIC src)
+target_compile_features(hello_world PRIVATE)
+target_link_libraries(hello_world par)
