@@ -3,6 +3,7 @@
 #include <cassert>
 #include <condition_variable>
 #include <functional>
+#include <iostream>
 #include <memory>
 #include <mutex>
 #include <queue>
@@ -35,8 +36,21 @@ public:
   T
   recv()
   {
-    std::lock_guard<std::mutex> lock(*mtx);
-    cond_var->wait(lock, [&rx=*rx]() { return not rx.empty(); });
+    std::unique_lock<std::mutex> lock(*mtx);
+    cond_var->wait(lock, [rx=rx.get()]() { return not rx->empty(); });
+    assert(not rx->empty());
+    auto value = std::move(rx->front());
+    rx->pop();
+    return value;
+  }
+
+  std::optional<T>
+  try_recv(std::stop_token st)
+  {
+    std::unique_lock<std::mutex> lock(*mtx);
+    if (not cond_var->wait(lock, std::move(st),
+          [rx=rx.get()]() { return not rx->empty(); }))
+      return std::nullopt;
     assert(not rx->empty());
     auto value = std::move(rx->front());
     rx->pop();
@@ -45,15 +59,15 @@ public:
 
 private:
   Receiver(
-      std::shared_ptr<std::queue<T>> tx,
+      std::shared_ptr<std::queue<T>> rx,
       std::shared_ptr<std::mutex> mtx,
       std::shared_ptr<std::condition_variable_any> cond_var)
-    : tx(std::move(tx)),
+    : rx(std::move(rx)),
       mtx(std::move(mtx)),
       cond_var(std::move(cond_var))
   {
-    if (not this->tx)
-      throw std::invalid_argument("tx is null.");
+    if (not this->rx)
+      throw std::invalid_argument("rx is null.");
 
     if (not this->mtx)
       throw std::invalid_argument("mtx is null.");
@@ -62,11 +76,11 @@ private:
       throw std::invalid_argument("mtx is null.");
   }
 
-  std::shared_ptr<std::queue<T>> rx;
-  std::shared_ptr<std::mutex> mtx;
-  std::shared_ptr<std::condition_variable_any> cond_var;
+  mutable std::shared_ptr<std::queue<T>> rx;
+  mutable std::shared_ptr<std::mutex> mtx;
+  mutable std::shared_ptr<std::condition_variable_any> cond_var;
 
-  friend std::tuple<Producer<T>, Receiver<T>> channel();
+  friend std::tuple<Producer<T>, Receiver<T>> channel<T>();
 };
 
 template<typename T>
@@ -117,11 +131,11 @@ private:
       throw std::invalid_argument("mtx is null.");
   }
 
-  std::shared_ptr<std::queue<T>> tx;
-  std::shared_ptr<std::mutex> mtx;
-  std::shared_ptr<std::condition_variable_any> cond_var;
+  mutable std::shared_ptr<std::queue<T>> tx;
+  mutable std::shared_ptr<std::mutex> mtx;
+  mutable std::shared_ptr<std::condition_variable_any> cond_var;
 
-  friend std::tuple<Producer<T>, Receiver<T>> channel();
+  friend std::tuple<Producer<T>, Receiver<T>> channel<T>();
 };
 
 template<typename T>
@@ -130,22 +144,25 @@ channel()
 {
   auto mtx = std::make_shared<std::mutex>();
   auto cond_var = std::make_shared<std::condition_variable_any>();
-  auto q = std::make_shared<std::queue>();
+  auto q = std::make_shared<std::queue<T>>();
 
   Producer tx(q, mtx, cond_var);
-  Receiver rx(std::move(q), std::move(mtx), std::move(cond_var));
+  Receiver rx(q, mtx, cond_var);
 
   return std::make_tuple(std::move(tx), std::move(rx));
 }
 
+using TaskFn = std::move_only_function<void()>;
+
 class Worker {
 public:
-  // The ctor will initialize the thread and pass itself as the functor of the thread.
-  Worker(Receiver<std::move_only_function<void()> tx)
+  // The ctor will initialize the thread and pass itself as the functor of the
+  // thread.
+  Worker(Receiver<TaskFn> rx)
     : handle(),
       rx(std::move(rx))
   {
-    handle = std::jthread(*this);
+    handle = std::jthread(&Worker::work, this);
   }
 
   // Default move ctor.
@@ -156,19 +173,28 @@ public:
   Worker& operator=(const Worker&) = delete;
   Worker& operator=(Worker&&) = delete;
 
+  void
+  stop()
+  { handle.request_stop(); }
+
+  void
+  join()
+  { handle.join(); }
+
 private:
   void
-  operator()() const
+  work() const
   {
     auto token = handle.get_stop_token();
     while (not token.stop_requested()) {
-      auto task = tx.recv();
-      task();
+      auto task = rx.try_recv(token);
+      if (not task) continue;
+      (*task)();
     }
   }
 
   std::jthread handle;
-  mutable Receiver<std::move_only_function<void()> rx;
+  mutable Receiver<TaskFn> rx;
 };
 
 class ThreadPool {
@@ -179,32 +205,40 @@ public:
     if (not nthreads)
       throw std::invalid_argument("The number of threads should be non-zero.");
 
-    auto [tx, rx] = channel();
+    auto [tx, rx] = channel<TaskFn>();
     return ThreadPool(nthreads, std::move(tx), std::move(rx));
   }
 
-  void submit(std::move_only_function<void()> fn)
+  void submit(TaskFn fn)
   {
     tx.send(std::move(fn));
+  }
+
+  // Stop all the workers.
+  ~ThreadPool()
+  {
+    for (auto& worker : workers)
+      worker.stop();
+
+    for (auto& worker : workers)
+      worker.join();
   }
 
 private:
   ThreadPool(
       unsigned nworkers,
-      Producer<std::move_only_function<void()> producer,
-      Receiver<std::move_only_function<void()> rx)
+      Producer<TaskFn> tx,
+      Receiver<TaskFn> rx)
     : workers(),
-      tx(std::move(producer))
+      tx(std::move(tx))
   {
-    for (unsigned i = 0; i < nworkers-1; ++i)
-      workers.push_back(Worker(rx));
-
-    // Move the Receiver on the last worker to avoid unnecessary copy.
-    workers.push_back(Worker(std::move(rx)));
+    workers.reserve(nworkers);
+    for (unsigned i = 0; i < nworkers; ++i)
+      workers.emplace_back(rx);
   }
 
   std::vector<Worker> workers;
-  Producer<std::move_only_function<void()> tx;
+  Producer<TaskFn> tx;
 };
 
 } // namespace par
