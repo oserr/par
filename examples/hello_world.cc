@@ -6,7 +6,7 @@
 #include <syncstream>
 #include <thread>
 
-#include "thread_pool.h"
+#include "par.h"
 
 using namespace std::literals;
 

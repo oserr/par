@@ -5,7 +5,7 @@
 #include <syncstream>
 #include <thread>
 
-#include "thread_pool.h"
+#include "par.h"
 
 int
 add_values(const std::vector<int>& coll)

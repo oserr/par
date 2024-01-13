@@ -29,7 +29,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(googletest)
 
 add_library(par STATIC
-  src/thread_pool.h)
+  src/par.h)
 
 set_target_properties(par PROPERTIES CXX_STANDARD 23 LINKER_LANGUAGE CXX)
 target_compile_features(par PRIVATE)
