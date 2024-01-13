@@ -8,7 +8,9 @@
 #include <iostream>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <queue>
+#include <ranges>
 #include <stdexcept>
 #include <thread>
 #include <tuple>
@@ -241,6 +243,49 @@ public:
     tx.send(std::move(fn));
 
     return fut;
+  }
+
+  template<typename Coll, typename F>
+  [[nodiscard]] auto
+  for_each(const Coll& coll, F fn)
+  {
+    using R = std::invoke_result_t<F, decltype(*coll.begin())>;
+    std::vector<std::future<R>> futs;
+    futs.reserve(coll.size());
+
+    for (auto val : coll)
+      futs.emplace_back(submit(fn, std::move(val)));
+
+    return futs;
+  }
+
+  template<typename F, typename R = std::invoke_result_t<F, std::uint64_t>>
+  [[nodiscard]] std::vector<std::future<R>>
+  for_range(std::uint64_t last, F fn)
+  {
+    std::vector<std::future<R>> futs;
+    futs.reserve(last);
+
+    for (std::uint64_t i = 0; i < last; ++i)
+      futs.emplace_back(submit(fn, i));
+
+    return futs;
+  }
+
+  template<typename F, typename R = std::invoke_result_t<F, std::int64_t>>
+  [[nodiscard]] std::vector<std::future<R>>
+  for_range(std::int64_t first, std::int64_t last, F fn)
+  {
+    if (last < first)
+      throw std::invalid_argument("last should be greater than first");
+
+    std::vector<std::future<R>> futs;
+    futs.reserve(last - first);
+
+    for (; first < last; ++first)
+      futs.emplace_back(submit(fn, first));
+
+    return futs;
   }
 
   // Stop all the workers.
