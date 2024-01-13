@@ -19,14 +19,30 @@
 
 namespace par {
 
-// Forward declaration.
+// Forward declaration of Producer so we can name Producer in a friend
+// declaration inside of Receiver, which is defined below.
 template<typename T>
 class Producer;
 
+//! Receiver functions as the receving end of a thread-safe one-way communication
+//! channel between one or more producers and one or more receivers. It is
+//! essentially a thread safe queue, but modeled as two ends.
 template<typename T>
 class Receiver {
 public:
+  // Disallow default construction to simplify creating a pair of (Producer,
+  // Receiver) in a safe manner. Otherwise, for example, we'd be able to create
+  // a Producer and Receiver with different underlying queues that are not
+  // connected. Note that this doesn't prevent someone from creating two pairs
+  // of channels and then mixing up the producers and receivers, but making
+  // construction of both pieces in one step makes misuse less likely, and make
+  // it more clear that the two pieces are meant to be used together.
   Receiver() = delete;
+
+
+  // Allow copy/move construction and assignment because having multiple
+  // receivers makes perfect sense, for example, as used below in the thread
+  // pool, where each worker thread has its own copy of the Receiver for tasks.
 
   Receiver(const Receiver& rx) = default;
   Receiver(Receiver&& rx) = default;
@@ -37,6 +53,9 @@ public:
   Receiver&
   operator=(Receiver&& rx) = default;
 
+
+  //! recv blocks the current thread until it receives a message T from a
+  //! producer.
   T
   recv()
   {
@@ -48,6 +67,15 @@ public:
     return value;
   }
 
+  //! try_recv blocks the current thread until either it receives a message T
+  //! from a producer, or the thread waiting for the message receives a signal
+  //! that it should stop working, in which it won't return anything.
+  //!
+  //! @param st A stop token which can be used by a separate thread to notify
+  //!  the thread waiting on try_recv that it should stop waiting, which can
+  //!  override the condition variable if the condition is not met yet.
+  //! @return A message T if a message is available to this thread, or null if
+  //!  the thread has been stopped before a message was avaiable.
   std::optional<T>
   try_recv(std::stop_token st)
   {
@@ -62,6 +90,15 @@ public:
   }
 
 private:
+  //! Initializes a Receiver with the underlying structures to create a channel
+  //! between the Producer and Receiver, a queue to convey messages FIFO, a
+  //! mutex to protect access, and a condition variable to allow Producers and
+  //! Receivers to notify each other when messages are available.
+  //!
+  //! @param rx A shared pointer to the queue for receving messages.
+  //! @param mtx A shared pointer to a mutex to protect access to the queue.
+  //! @param cond_var A shared pointer to a condition variable to receive
+  //!  notifications from one or more producers.
   Receiver(
       std::shared_ptr<std::queue<T>> rx,
       std::shared_ptr<std::mutex> mtx,
@@ -84,6 +121,7 @@ private:
   mutable std::shared_ptr<std::mutex> mtx;
   mutable std::shared_ptr<std::condition_variable_any> cond_var;
 
+  //! A function to create a channel between a producer and a receiver.
   friend std::tuple<Producer<T>, Receiver<T>> channel<T>();
 };
 
