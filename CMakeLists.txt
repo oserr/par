@@ -31,7 +31,10 @@ FetchContent_MakeAvailable(googletest)
 add_library(par STATIC
   src/par.h)
 
-set_target_properties(par PROPERTIES CXX_STANDARD 23 LINKER_LANGUAGE CXX)
+set_target_properties(par PROPERTIES
+  CXX_STANDARD 23
+  LINKER_LANGUAGE CXX
+  POSITION_INDEPENDENT_CODE ON)
 target_compile_features(par PRIVATE)
 target_link_libraries(par ${CMAKE_THREADS_LIBS_INIT})
 
