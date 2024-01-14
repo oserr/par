@@ -134,12 +134,24 @@ private:
   friend std::tuple<Producer<T>, Receiver<T>> channel<T>();
 };
 
+//! Producer functions as the transmitting end of a thread-safe one-way
+//! communication channel between one or more producers and one or more
+//! receivers. It is essentially a thread safe queue, but modeled as two
+//! separate ends to better encapsulate send and receive.
 template<typename T>
 class Producer {
 public:
+  // When we create a Producer, we want to create a channel with the Receiver
+  // end, and hence use channel() to create both at the same time. See comment
+  // for Receiver default ctor for more motivation.
   Producer() = delete;
+
   Producer(const Producer& tx) = default;
   Producer(Producer&& tx) = default;
+
+  // Allow copy/move construction and assignment because having multiple
+  // transmitters makes perfect sense, for example, if you have two different
+  // threads producing different types of work tasks.
 
   Producer&
   operator=(const Producer& tx) = default;
@@ -147,6 +159,10 @@ public:
   Producer&
   operator=(Producer&& tx) = default;
 
+  //! Transmits a message to the receiving end of the channel. Blocks the
+  //! current thread until the message is put on the the channel.
+  //!
+  //! @param value The transmission message.
   void
   send(T&& value)
   {
@@ -155,6 +171,10 @@ public:
     cond_var->notify_all();
   }
 
+  //! Transmits a message to the receiving end of the channel. Blocks the
+  //! current thread until the message is put on the channel.
+  //!
+  //! @param value The transmission message.
   void
   send(const T& value)
   {
@@ -164,6 +184,15 @@ public:
   }
 
 private:
+  //! Initializes a Producer with the underlying structures to create a channel
+  //! between the Producer and Receiver, a queue to convey messages FIFO, a
+  //! mutex to protect access, and a condition variable to allow the Producer to
+  //! notify the Receiver when it is transmitting a message.
+  //!
+  //! @param tx A shared pointer to the queue for receving messages.
+  //! @param mtx A shared pointer to a mutex to protect access to the queue.
+  //! @param cond_var A shared pointer to a condition variable to send
+  //!  notifications to one or more receivers.
   Producer(
       std::shared_ptr<std::queue<T>> tx,
       std::shared_ptr<std::mutex> mtx,
@@ -186,9 +215,14 @@ private:
   std::shared_ptr<std::mutex> mtx;
   std::shared_ptr<std::condition_variable_any> cond_var;
 
+  //! A function to create a channel between a producer and a receiver.
   friend std::tuple<Producer<T>, Receiver<T>> channel<T>();
 };
 
+//! @return A channel, a pair of (Producer, Receiver), to allow communication
+//! between one or more threads in a thread-safe manner. A channel supports
+//! only one kind of message. Hence, separate channels are needed to send
+//! different types of messages.
 template<typename T>
 std::tuple<Producer<T>, Receiver<T>>
 channel()
