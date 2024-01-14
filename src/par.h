@@ -126,9 +126,9 @@ private:
       throw std::invalid_argument("mtx is null.");
   }
 
-  mutable std::shared_ptr<std::queue<T>> rx;
-  mutable std::shared_ptr<std::mutex> mtx;
-  mutable std::shared_ptr<std::condition_variable_any> cond_var;
+  std::shared_ptr<std::queue<T>> rx;
+  std::shared_ptr<std::mutex> mtx;
+  std::shared_ptr<std::condition_variable_any> cond_var;
 
   //! A function to create a channel between a producer and a receiver.
   friend std::tuple<Producer<T>, Receiver<T>> channel<T>();
@@ -182,9 +182,9 @@ private:
       throw std::invalid_argument("mtx is null.");
   }
 
-  mutable std::shared_ptr<std::queue<T>> tx;
-  mutable std::shared_ptr<std::mutex> mtx;
-  mutable std::shared_ptr<std::condition_variable_any> cond_var;
+  std::shared_ptr<std::queue<T>> tx;
+  std::shared_ptr<std::mutex> mtx;
+  std::shared_ptr<std::condition_variable_any> cond_var;
 
   friend std::tuple<Producer<T>, Receiver<T>> channel<T>();
 };
