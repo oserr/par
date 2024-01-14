@@ -36,7 +36,7 @@ main()
   for (int i = 0; i < 10; ++i)
     colls.emplace_back(100, 1);
 
-  auto tp = par::ThreadPool::with_nthreads(10);
+  auto tp = par::WorkQ::with_nthreads(10);
   auto futs = tp.for_each(colls, add_values);
 
   for (int i = 0; auto& fut : futs) {

@@ -100,7 +100,7 @@ hello3()
 int
 main()
 {
-  auto tp = par::ThreadPool::with_nthreads(8);
+  auto tp = par::WorkQ::with_nthreads(8);
 
   for (unsigned i = 0; i < 8; ++i)
     (void)tp.submit(hello_world, i);

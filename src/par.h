@@ -248,16 +248,16 @@ private:
   mutable Receiver<TaskFn> rx;
 };
 
-class ThreadPool {
+class WorkQ {
 public:
-  static ThreadPool
+  static WorkQ
   with_nthreads(unsigned nthreads)
   {
     if (not nthreads)
       throw std::invalid_argument("The number of threads should be non-zero.");
 
     auto [tx, rx] = channel<TaskFn>();
-    return ThreadPool(nthreads, std::move(tx), std::move(rx));
+    return WorkQ(nthreads, std::move(tx), std::move(rx));
   }
 
   template<
@@ -340,7 +340,7 @@ public:
   }
 
   // Stop all the workers.
-  ~ThreadPool()
+  ~WorkQ()
   {
     for (auto& worker : workers)
       worker.stop();
@@ -350,7 +350,7 @@ public:
   }
 
 private:
-  ThreadPool(
+  WorkQ(
       unsigned nworkers,
       Producer<TaskFn> tx,
       Receiver<TaskFn> rx)
