@@ -1,3 +1,12 @@
+/*!
+This header defines the types used to build and work with WorkQ, a simple and
+convenient thread pool to simplify writing parallel code. The types defined in
+this file include a Producer, Receiver, Worker, and WorkQ. WorkQ uses one or
+more workers, each of which represents a thread, to execute tasks in FIFO order.
+The WorkQ communicates with its workers via the Producer-Receiver channel, and
+uses the Producer to send tasks, and the Workers use the Receiver to receive
+tasks.
+ */
 #pragma once
 
 #include <cassert>
