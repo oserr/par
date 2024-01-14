@@ -47,7 +47,7 @@ function(create_example target)
   target_link_libraries(${target} par)
 endfunction()
 
-set(${PROJECT_NAME}_INCLUDE_DIRS ${PROJECT_SOURCE_DIR}
+set(${PROJECT_NAME}_INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/src
   CACHE INTERNAL "${PROJECT_NAME}: Include Directories" FORCE)
 
 create_example(hello_world)
