@@ -299,20 +299,20 @@ public:
     typename... Args,
     typename R = std::invoke_result_t<F, Args...>>
   [[nodiscard]] std::future<R>
-  submit(F func, Args... args)
+  submit(F fn, Args... args)
   {
     std::promise<R> prom;
     auto fut = prom.get_future();
 
-    auto fn = [prom=std::move(prom),
-               func=std::move(func),
+    auto f = [prom=std::move(prom),
+               fn=std::move(fn),
                ...args=std::move(args)]() mutable
     {
       try {
         if constexpr (not std::is_void_v<R>) {
-          prom.set_value(std::invoke(func, args...));
+          prom.set_value(std::invoke(fn, args...));
         } else {
-          std::invoke(func, args...);
+          std::invoke(fn, args...);
           prom.set_value();
         }
       } catch (...) {
@@ -320,7 +320,7 @@ public:
       }
     };
 
-    tx.send(std::move(fn));
+    tx.send(std::move(f));
 
     return fut;
   }
