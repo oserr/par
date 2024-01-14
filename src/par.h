@@ -282,6 +282,11 @@ public:
     return fut;
   }
 
+  template<typename... F>
+  [[nodiscard]] auto
+  submit_all(F... fns)
+  { return std::make_tuple(submit(fns)...); }
+
   template<typename Coll, typename F>
   [[nodiscard]] auto
   for_each(const Coll& coll, F fn)
