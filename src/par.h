@@ -302,11 +302,21 @@ private:
   // The Receiver for receiving messages with tasks from a WorkQ.
   mutable Receiver<TaskFn> rx;
 
+  // Make WorkQ a friend because WorkQ is meant to be the only user of Worker,
+  // and so it can call stop and join.
   friend WorkQ;
 };
 
+//! WorkQ is the motivation for the existence of this library, and represents a
+//! thread pool with convenient functions to execute tasks on one of it's threads.
 class WorkQ {
 public:
+  //! @brief Initializes a WorkQ with a given number of threads.
+  //!
+  //! @param nthreads The number of threads the WorkQ should be initialized
+  //!  with. If zero, then returns an exception. If nthreads is greater than the
+  //!  number of threads supported by the hardware, then the number of threads
+  //!  is capped at the maximum supported by the hardware.
   static WorkQ
   with_nthreads(unsigned nthreads)
   {
@@ -317,6 +327,15 @@ public:
     return WorkQ(nthreads, std::move(tx), std::move(rx));
   }
 
+  //! @brief Creates a task from a function and zero or more arguments to be
+  //! executed on a thread owned by WorkQ.
+  //!
+  //! The task is added to a queue of tasks in FIFO order, and will be taken off
+  //! the queue after preceding tasks have been taken from the queue.
+  //!
+  //! @param fn A callable entity, e.g. function, functor, lambda, etc.
+  //! @param args A packet of zero or more arguments to invoke fn with.
+  //! @return A future with the value computed by fn(args...).
   template<
     typename F,
     typename... Args,
@@ -324,9 +343,12 @@ public:
   [[nodiscard]] std::future<R>
   submit(F fn, Args... args)
   {
+    // Create a promise. The future is returned immediately. The promise is
+    // packaged with the task, and it's value is set when the task is executed.
     std::promise<R> prom;
     auto fut = prom.get_future();
 
+    // Create a task.
     auto f = [prom=std::move(prom),
                fn=std::move(fn),
                ...args=std::move(args)]() mutable
@@ -343,6 +365,7 @@ public:
       }
     };
 
+    // Send the task to the workers.
     tx.send(std::move(f));
 
     return fut;
