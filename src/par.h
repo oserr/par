@@ -241,6 +241,9 @@ channel()
 //! between the WorkQ and the Workers.
 using TaskFn = std::move_only_function<void()>;
 
+// Forward declaration to make WorkQ a friend of Worker.
+class WorkQ;
+
 // A Worker is mapped one-to-one with a thread, and receives messages from a
 // WorkQ with task of work.
 class Worker {
@@ -263,6 +266,7 @@ public:
   Worker& operator=(const Worker&) = delete;
   Worker& operator=(Worker&&) = delete;
 
+private:
   // Signals the Worker that it should stop waiting for or processing messages.
   void
   stop()
@@ -273,7 +277,6 @@ public:
   join()
   { handle.join(); }
 
-private:
   // Loops continuously waiting, receiving, and executing tasks, until it
   // receives a signal that it should stop.
   void
@@ -297,6 +300,8 @@ private:
 
   // The Receiver for receiving messages with tasks from a WorkQ.
   mutable Receiver<TaskFn> rx;
+
+  friend WorkQ;
 };
 
 class WorkQ {
