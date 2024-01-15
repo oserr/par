@@ -237,12 +237,17 @@ channel()
   return std::make_tuple(std::move(tx), std::move(rx));
 }
 
+//! Represents the type of messages sent from the Producer to the Receiver
+//! between the WorkQ and the Workers.
 using TaskFn = std::move_only_function<void()>;
 
+// A Worker is mapped one-to-one with a thread, and receives messages from a
+// WorkQ with task of work.
 class Worker {
 public:
-  // The ctor will initialize the thread and pass itself as the functor of the
-  // thread.
+  // A Worker is initialized with a Receiver, which is used to receive messages
+  // with tasks of work. The Worker starts a thread with it's Worker::work
+  // function and awaits messages on the receiver.
   Worker(Receiver<TaskFn> rx)
     : handle(),
       rx(std::move(rx))
@@ -258,27 +263,39 @@ public:
   Worker& operator=(const Worker&) = delete;
   Worker& operator=(Worker&&) = delete;
 
+  // Signals the Worker that it should stop waiting for or processing messages.
   void
   stop()
   { handle.request_stop(); }
 
+  // Waits for the thread to join. Won't work if stop is not called first.
   void
   join()
   { handle.join(); }
 
 private:
+  // Loops continuously waiting, receiving, and executing tasks, until it
+  // receives a signal that it should stop.
   void
   work() const
   {
     auto token = handle.get_stop_token();
     while (not token.stop_requested()) {
+      // Wait until a message is received with a task.
       auto task = rx.try_recv(token);
+
+      // If the task is null, then we need to stop.
       if (not task) continue;
+
+      // Execute the task.
       (*task)();
     }
   }
 
+  // The thread on which this Worker runs.
   std::jthread handle;
+
+  // The Receiver for receiving messages with tasks from a WorkQ.
   mutable Receiver<TaskFn> rx;
 };
 
