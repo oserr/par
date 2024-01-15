@@ -245,7 +245,8 @@ using TaskFn = std::move_only_function<void()>;
 class WorkQ;
 
 // A Worker is mapped one-to-one with a thread, and receives messages from a
-// WorkQ with task of work.
+// WorkQ with task of work. Worker is designed to be used by WorkQ, and is not
+// meant to be used separately.
 class Worker {
 public:
   // A Worker is initialized with a Receiver, which is used to receive messages
