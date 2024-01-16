@@ -9,6 +9,7 @@ tasks.
  */
 #pragma once
 
+#include <algorithm>
 #include <cassert>
 #include <condition_variable>
 #include <exception>
@@ -323,8 +324,10 @@ public:
     if (not nthreads)
       throw std::invalid_argument("The number of threads should be non-zero.");
 
+    const auto n = std::min(nthreads, std::thread::hardware_concurrency());
+
     auto [tx, rx] = channel<TaskFn>();
-    return WorkQ(nthreads, std::move(tx), std::move(rx));
+    return WorkQ(n, std::move(tx), std::move(rx));
   }
 
   //! @brief Creates a task from a function and zero or more arguments to be
