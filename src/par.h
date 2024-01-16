@@ -371,6 +371,11 @@ public:
     return fut;
   }
 
+  //! @brief Creates a tuple of futures for one or more functions.
+  //!
+  //! @param fns A pack of one or more functions, which take no parameters, but
+  //!  each can return a different type.
+  //! @return A tuple of futures, one for each function.
   template<typename... F>
   [[nodiscard]] auto
   submit_all(F... fns)
