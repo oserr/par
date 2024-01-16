@@ -330,6 +330,11 @@ public:
     return WorkQ(n, std::move(tx), std::move(rx));
   }
 
+  //! @brief Initializes a WorkQ with the number of threads allowed by the hardware.
+  static WorkQ
+  with_all_threads()
+  { return with_nthreads(std::thread::hardware_concurrency()); }
+
   //! @brief Creates a task from a function and zero or more arguments to be
   //! executed on a thread owned by WorkQ.
   //!
