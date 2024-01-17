@@ -389,6 +389,13 @@ public:
   submit_all(F... fns)
   { return std::make_tuple(submit(fns)...); }
 
+  //! @brief Creates a feature for every item in a container, collection, or
+  //!  range supporting forward iterators.
+  //!
+  //! @param coll A container, collection, or range supporting foward iterators
+  //!  and Coll::size.
+  //! @param fn A function to apply to every item in coll.
+  //! @return A vector with a feature for every item in the collection.
   template<typename Coll, typename F>
   [[nodiscard]] auto
   for_each(const Coll& coll, F fn)
@@ -403,6 +410,12 @@ public:
     return futs;
   }
 
+  //! @brief Creates a feature for every number in the range [0, last).
+  //!
+  //! @param last The end of the range, from 0 to last, but not including last,
+  //!  to which the function is applied.
+  //! @param fn A function to apply to number in [0, last).
+  //! @return A vector with a feature for every number in the range.
   template<typename F, typename R = std::invoke_result_t<F, std::uint64_t>>
   [[nodiscard]] std::vector<std::future<R>>
   for_range(std::uint64_t last, F fn)
@@ -416,6 +429,11 @@ public:
     return futs;
   }
 
+  //! @brief Creates a feature for every number in the range [first, last).
+  //!
+  //! @param first The beginning of the range, including first.
+  //! @param last The end of the range, not including it.
+  //! @return A vector with a feature for every number in the range [0, last).
   template<typename F, typename R = std::invoke_result_t<F, std::int64_t>>
   [[nodiscard]] std::vector<std::future<R>>
   for_range(std::int64_t first, std::int64_t last, F fn)
@@ -432,7 +450,7 @@ public:
     return futs;
   }
 
-  // Stop all the workers.
+  // Stop all the workers and wait for the threads to join.
   ~WorkQ()
   {
     for (auto& worker : workers)
@@ -443,6 +461,12 @@ public:
   }
 
 private:
+  //! Initializes the WorkQ with 1 or more workers, and a channel between a
+  //! producer and receiver for sending messages with work tasks to the workers.
+  //!
+  //! @param nworkers The number of workers, i.e. threads, to use the thread pool.
+  //! @param tx A Producer to send messages to the workers.
+  //! @param rx A Receiver for each worker to receive messages from the WorkQ.
   WorkQ(
       unsigned nworkers,
       Producer<TaskFn> tx,
@@ -450,6 +474,9 @@ private:
     : workers(),
       tx(std::move(tx))
   {
+    if (not nworkers)
+      throw std::invalid_argument("nworkders should be non-zero.");
+
     workers.reserve(nworkers);
     for (unsigned i = 0; i < nworkers; ++i)
       workers.emplace_back(rx);
