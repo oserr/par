@@ -312,6 +312,10 @@ private:
 //! thread pool with convenient functions to execute tasks on one of it's threads.
 class WorkQ {
 public:
+  // Copy control.
+  WorkQ(WorkQ&& other) = default;
+  WorkQ(const WorkQ& other) = delete;
+
   //! @brief Initializes a WorkQ with a given number of threads.
   //!
   //! @param nthreads The number of threads the WorkQ should be initialized
@@ -330,7 +334,8 @@ public:
     return WorkQ(n, std::move(tx), std::move(rx));
   }
 
-  //! @brief Initializes a WorkQ with the number of threads allowed by the hardware.
+  //! @brief Initializes a WorkQ with the number of threads allowed by the
+  //! hardware.
   static WorkQ
   with_all_threads()
   { return with_nthreads(std::thread::hardware_concurrency()); }
