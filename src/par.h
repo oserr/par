@@ -429,7 +429,7 @@ public:
     futs.reserve(last);
 
     for (std::uint64_t i = 0; i < last; ++i)
-      futs.emplace_back(submit(fn, i));
+      futs.push_back(submit(fn, i));
 
     return futs;
   }
