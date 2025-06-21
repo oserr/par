@@ -169,7 +169,7 @@ public:
   {
     std::lock_guard<std::mutex> lock(*mtx);
     tx->push(std::move(value));
-    cond_var->notify_all();
+    cond_var->notify_one();
   }
 
   //! Transmits a message to the receiving end of the channel. Blocks the
@@ -181,7 +181,7 @@ public:
   {
     std::lock_guard<std::mutex> lock(*mtx);
     tx->push(value);
-    cond_var->notify_all();
+    cond_var->notify_one();
   }
 
 private:
