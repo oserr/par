@@ -13,6 +13,7 @@ tasks.
 #include <cassert>
 #include <condition_variable>
 #include <exception>
+#include <format>
 #include <functional>
 #include <future>
 #include <memory>
@@ -21,11 +22,16 @@ tasks.
 #include <queue>
 #include <ranges>
 #include <stdexcept>
+#include <system_error>
 #include <thread>
 #include <tuple>
 #include <type_traits>
 #include <utility>
 #include <vector>
+
+// TODO: Enable setting CPU affinity on any platform.
+#include <pthread.h>
+#include <sched.h>
 
 namespace par {
 
@@ -48,7 +54,6 @@ public:
   // construction of both pieces in one step makes misuse less likely, and make
   // it more clear that the two pieces are meant to be used together.
   Receiver() = delete;
-
 
   // Allow copy/move construction and assignment because having multiple
   // receivers makes perfect sense, for example, as used below in the thread
@@ -252,12 +257,24 @@ class Worker {
 public:
   // A Worker is initialized with a Receiver, which is used to receive messages
   // with tasks of work. The Worker starts a thread with it's Worker::work
-  // function and awaits messages on the receiver.
-  Worker(Receiver<TaskFn> rx)
+  // function and awaits messages on the receiver. The ctro tries to pin the
+  // thread to CPU with cpu_id, and throws with a runtime error if it's
+  // unsuccessful.
+  Worker(Receiver<TaskFn> rx, unsigned cpu_id)
     : handle(),
       rx(std::move(rx))
   {
     handle = std::jthread(&Worker::work, this);
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(cpu_id, &cpuset);
+    int rc = pthread_setaffinity_np(
+        handle.native_handle(), sizeof(cpu_set_t), &cpuset);
+    if (rc != 0) {
+      auto err_code = std::make_error_code(std::errc(rc));
+      auto err_msg = std::format("Unable to pin thread to CPU [id={}]", cpu_id);
+      throw std::system_error(err_code, err_msg);
+    }
   }
 
   // Default move ctor.
@@ -481,10 +498,12 @@ private:
   {
     if (not nworkers)
       throw std::invalid_argument("nworkders should be non-zero.");
-
+    unsigned num_cores = std::thread::hardware_concurrency();
     workers.reserve(nworkers);
-    for (unsigned i = 0; i < nworkers; ++i)
-      workers.emplace_back(rx);
+    for (unsigned i = 0; i < nworkers; ++i) {
+      unsigned cpu_id = i % num_cores;
+      workers.emplace_back(rx, cpu_id);
+    }
   }
 
   std::vector<Worker> workers;
